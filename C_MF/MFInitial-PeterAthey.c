@@ -35,8 +35,7 @@ char map[20][20] = {{'#', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#',
                    {'#', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#'}};
 
 int gameover, score; 
-int x, y, theta, fruitx, fruity, flag;
-float v_x = 0, v_y = 0;
+int x, y, fruitx, fruity, flag; 
   
 // Function to generate the fruit
 // within the boundary 
@@ -44,67 +43,45 @@ void setup()
 { 
     gameover = 0;
   
-    // Stores height and width
+    // Stores height and width 
     x = 1;
     y = 9;
-
-    theta = 270;
-// label1:
-//     fruitx = rand() % 20;
-//     if (fruitx == 0)
-//         goto label1;
-// label2:
-//     fruity = rand() % 20;
-//     if (fruity == 0)
-//         goto label2;
-//     score = 0;
-}
-
-// Function to draw the boundaries
-void draw()
-{
-    system("cls");
-    for (i = 0; i < height; i++) {
-        for (j = 0; j < width; j++) {
-            if (i == x && j == y)
+// label1: 
+//     fruitx = rand() % 20; 
+//     if (fruitx == 0) 
+//         goto label1; 
+// label2: 
+//     fruity = rand() % 20; 
+//     if (fruity == 0) 
+//         goto label2; 
+//     score = 0; 
+} 
+  
+// Function to draw the boundaries 
+void draw() 
+{ 
+    system("cls"); 
+    for (i = 0; i < height; i++) { 
+        for (j = 0; j < width; j++) { 
+            if (i == x && j == y) 
                     printf("0");
             else {
                 printf("%c", map[i][j]);
             }
-        }
-        printf("\n");
-    }
-
+        } 
+        printf("\n"); 
+    } 
+  
     // Print the score after the 
     // game ends 
     printf("score = %d", score); 
     printf("\n"); 
     printf("press X to quit the game"); 
-}
-
-// Function to perform 3D rendering
-int render3d() {
-    printf("This will be a 3D render.\n");
-    char render_cont;
-    
-    while (render_cont != 'n') {
-        printf("Press n to resume the game.\n");
-        scanf(" %c", &render_cont);
-
-        if (render_cont == 'n') {
-            // Signal to resume the game
-            return 1;
-        }
-    }
-
-    // Signal not to resume the game
-    return 0;
-}
+} 
   
 // Function to take the input 
 void input() 
-{
-    int last_flag;
+{ 
     if (kbhit()) { 
         switch (getch()) { 
         case 'a': 
@@ -118,79 +95,38 @@ void input()
             break; 
         case 'w': 
             flag = 4; 
-            break;
-        case 'r':
-
-            flag = 5;
-            break;
+            break; 
         case 'x': 
             gameover = 1; 
             break; 
         } 
     } 
 } 
-
+  
 // Function for the logic behind 
-// each movement
-
-// Currently only functions to move directly up/down and left/right, need to check if I can leave it as is/I want to make it correspond to where the user is looking
+// each movement 
 void logic() 
 { 
     sleep(0.1);
     int tempx = x;
     int tempy = y;
-    int resumeGame;
     switch (flag) {
         case 1:
             y--;
-            v_y == -0.25;
-            if(kbhit()){
-                input();
-            }
-            else{
-                flag = 0;
-            }
-            break;
+            flag = 0;
+            break; 
         case 2: 
             x++;
-            v_x == +0.25;
-            if(kbhit()){
-                input();
-            }
-            else{
-                flag = 0;
-            }
+            flag = 0;
             break; 
         case 3: 
             y++;
-            v_y == +0.25;
-            if(kbhit()){
-                input();
-            }
-            else{
-                flag = 0;
-            }
+            flag = 0;
             break; 
         case 4: 
             x--;
-            v_x == -0.25;
-            if(kbhit()){
-                input();
-            }
-            else{
-                flag = 0;
-            }
-            break;
-        case 5:
-            resumeGame = 0;
-            do {
-                // Call render3d and check the return value
-                resumeGame = render3d();
-
-                // You can add any additional logic here if needed
-            } while (resumeGame);
             flag = 0;
-            break;
+            break; 
         default: 
             break;
     }
