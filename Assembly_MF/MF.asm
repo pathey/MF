@@ -5,26 +5,26 @@
 player:		.asciiz "0"		#This is the player symbol on the overhead map
 newline:	.asciiz  "\n"
 map:				#This defines a map for the player to navigate
-		.asciiz "####################"
-		.asciiz "#       # #        #"
-		.asciiz "#       # #        #"
-		.asciiz "#       # #        #"
-		.asciiz "#       # #        #"
-		.asciiz "#       # #        #"
-		.asciiz "#       # #        #"
-		.asciiz "#       # #        #"
-		.asciiz "#         #        #"
-		.asciiz "#       # ##### ####"
-		.asciiz "#       #          #"
-		.asciiz "#       ############"
-		.asciiz "#                  #"
-		.asciiz "#                  #"
-		.asciiz "#                  #"
-		.asciiz "#                  #"
-		.asciiz "#                  #"
-		.asciiz "#                  #"
-		.asciiz "#                  #"
-		.asciiz "####################"
+		.asciiz "####################\n"
+		.asciiz "#       # #        #\n"
+		.asciiz "#       # #        #\n"
+		.asciiz "#       # #        #\n"
+		.asciiz "#       # #        #\n"
+		.asciiz "#       # #        #\n"
+		.asciiz "#       # #        #\n"
+		.asciiz "#       # #        #\n"
+		.asciiz "#         #        #\n"
+		.asciiz "#       # ##### ####\n"
+		.asciiz "#       #          #\n"
+		.asciiz "#       ############\n"
+		.asciiz "#                  #\n"
+		.asciiz "#                  #\n"
+		.asciiz "#                  #\n"
+		.asciiz "#                  #\n"
+		.asciiz "#                  #\n"
+		.asciiz "#                  #\n"
+		.asciiz "#                  #\n"
+		.asciiz "####################\n\0\0"
 
 
 .text 				#Code starts here
@@ -41,7 +41,7 @@ printMap:
         lb $a1, 0($a0)      # Load a character from the map
         beqz $a1, endPrint   # If the character is null, end the loop
         syscall             # Print the character
-        addi $a0, $a0, 1    # Move to the next character in the map
+        addi $a0, $a0, 22    # Move to the next character in the map
         j loop              # Repeat the loop
     endPrint:
         li $v0, 4           # System call code for printing a string
