@@ -26,9 +26,12 @@ map:				#This defines a map for the player to navigate
 			.asciiz "#                  #\n"
 			.asciiz "####################\n\0\0"
 		
-clear_screen:   	.asciiz "\x1b[2J"      # Escape sequence to clear the screen
-cursor_home:    	.asciiz "\033[20A\0"       # Escape sequence to move cursor to home (top-left corner)
-cursor_down:    	.asciiz "\033[B\0"       # Escape sequence to move cursor down
+#clear_screen:   	.asciiz "\033[2J"      # Escape sequence to clear the screen
+clear_screen:   	.byte 0x1b 0x5b 0x32 0x4a 0x00
+#clear_screen:   	.asciiz "Hello"      # Escape sequence to clear the screen
+#cursor_home:    	.asciiz "\033[20A"     # Escape sequence to move cursor to home (top-left corner)
+cursor_home:    	.byte 0x1b 0x5b 0x32 0x31 0x41 0x00
+cursor_down:    	.asciiz "\033[B"       # Escape sequence to move cursor down
 
 
 .text 				#Code starts here
@@ -55,14 +58,16 @@ main:
 	sw $t4, 20($gp)
 	
 	li $v0, 4
-    	la $a0, clear_screen
-    	syscall
+  la $a0, clear_screen
+  syscall
+
+#j end
 
 	jal draw	         	# Jump to the printMap subroutine
 	
-	li $v0, 4
-    	la $a0, clear_screen
-    	syscall
+  #li $v0, 4
+  #la $a0, clear_screen
+  #syscall
 	
 	jal draw
 	
