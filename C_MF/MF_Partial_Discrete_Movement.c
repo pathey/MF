@@ -64,6 +64,15 @@ void setup()
 }
 
 void calc_movement(int theta){
+    float temp_true_x = true_x;
+    float sin_theta = sin(theta);
+    float cos_theta = cos(theta);
+    true_x = true_x + sin(theta);
+    true_y = true_y + cos(theta);
+    if (true_x > 20.0 || true_x < 1.0){
+        true_x = temp_true_x
+    }
+
 }
 
 // Function to draw the boundaries
@@ -153,7 +162,6 @@ void logic()
     switch (flag) {
         case 1:
             map_y--;
-            v_y == -0.25;
             if(kbhit()){
                 input();
             }
@@ -163,7 +171,6 @@ void logic()
             break;
         case 2: 
             map_x++;
-            v_x == +0.25;
             if(kbhit()){
                 input();
             }
@@ -173,7 +180,6 @@ void logic()
             break; 
         case 3: 
             map_y++;
-            v_y == +0.25;
             if(kbhit()){
                 input();
             }
@@ -183,7 +189,6 @@ void logic()
             break; 
         case 4: 
             map_x--;
-            v_x == -0.25;
             if(kbhit()){
                 input();
             }
