@@ -6,6 +6,9 @@
 
 
 .data
+n:			.space 	4
+lfsr:			.space 	4
+bit:			.space 	4
 player:			.asciiz "0"		#This is the player symbol on the overhead map
 newline:		.asciiz  "\n"
 map:				#This defines a map for the player to navigate
@@ -29,6 +32,8 @@ map:				#This defines a map for the player to navigate
 			.asciiz "#                  #"
 			.asciiz "#                  #"
 			.asciiz "####################\0"
+
+
 			
 			
 #Map 1 was originally how I planned to implement my 2D array, I've left it in as a visualization tool/to show the path I took
@@ -67,7 +72,7 @@ blueberries:		.asciiz "Blueberries picked up: "
 apples:			.asciiz "Apples picked up: "
 oranges:		.asciiz "Oranges picked up: "
 bananas:		.asciiz "Bananas picked up: "
-dragonfruit:		.asciiz "Dragonfruits picked up: "
+dragonfruits:		.asciiz "Dragonfruits picked up: "
 
 
 bonk:			.asciiz "\nBONK!\n"		#triggered by colliding with a wall.
@@ -187,8 +192,14 @@ bonk:			.asciiz "\nBONK!\n"		#triggered by colliding with a wall.
 #gp +68 is pickup #2 type
 #gp +72 is pickup #3 type
 #gp +76 is pickup #4 type
+#gp +80 high time of last fruit change
+#gp +84 low time of last fruit change
+#gp +88 is an indicator for new fruit
 
-
+#Fruit 1 is at x: 4 y: 4
+#Fruit 2 is at x: 14 y: 3
+#Fruit 3 is at x: 3 y: 16
+#Fruit 4 is at x: 16 y: 14
 
 
 
@@ -200,11 +211,11 @@ main:
 	li $t1, 1
 	sw $t1, 8($gp)				#Loads and stores y coordinate to position and previous position
 	sw $t1, 28($gp)
-	li $t2, 1
-	sw $t2, 12($gp)				#Loads and stores pick up info to current and previous
-	sw $t2, 32($gp)
+	sw $t1, 12($gp)				#Loads and stores pick up info to current and previous
+	sw $t1, 16($gp)
+	sw $t1, 88($gp)
 	li $t3, 0
-	sw $t3, 16($gp)
+	sw $t3, 32($gp)
 	sw $t3, 36($gp)
 	sw $t3, 44($gp)
 	sw $t3, 48($gp)
@@ -217,8 +228,13 @@ main:
 	sw $t3, 76($gp)
 	li $t4, 21
 	sw $t4, 20($gp)				#Loads and stores row width
-	li $t5, 0x10040000
+	li $t5, 0x10040000			#Uses the heap address for the bitmap display
 	sw $t5, 40($gp)				#Loads and stores bitmap base address
+	
+	li $v0, 30	
+	syscall
+	sw $a1, 80($gp)
+	sw $a0, 84($gp)							#Set time of last fruit switch
 	
 	
 	
@@ -256,14 +272,18 @@ main:
 	#syscall
 	#j end
 	
+	jal lfsrSetUp
+	
 	jal clearScreen
 	
-
 	jal bitMapMapDraw	         	# Jump to the printMap subroutine
-	
 	jal drawPerson
+
+	jal fruitHandler
 	
 	jal infoDraw
+	
+	
 	
 	#li $a0, 9
 	#li $a1, 1
@@ -278,18 +298,26 @@ main:
 	
 while:
 	
+	jal fruitHandler
 	
 	addi $sp, $sp, -4
 	sw $v0, ($sp)
 	
-	jal checkChange
+	jal checkPlayerChange
 	
 	move $t4, $v0
+	bne $t4, 0, willDraw
+	jal checkFruitChange
+	move $t5, $v0
 	
 	lw $v0, ($sp)
 	addi $sp, $sp, 4
 	
-	beq $t4, 0, skipDraw
+	
+	beq $t5, 0, skipDraw
+	willDraw:
+	
+	
     	jal drawPerson           		# Jump to the printMap subroutine
     	
     	jal infoDraw				# Jump to infoDraw
@@ -306,13 +334,15 @@ while:
 	beq $a0, -1, noInputHandling	#Handle input if it isn't -1
 	jal inputHandler
 	noInputHandling:
+	
+	
 
 	j while				#Loop unless player hits X to exit
 
 
 
 #Check if there is a need to re-render
-checkChange:
+checkPlayerChange:
 	
 	storetvalues
 	
@@ -320,19 +350,19 @@ checkChange:
 	
 	lw $t0, 24($gp)			#Grab the previous values
 	lw $t1, 28($gp)
-	lw $t2, 32($gp)
-	lw $t3, 36($gp)
+	#lw $t2, 32($gp)
+	#lw $t3, 36($gp)
 	
 	
 	lw $t4, 4($gp)			#Grab the currently stored values
 	lw $t5, 8($gp)
-	lw $t6, 12($gp)
-	lw $t7, 16($gp)
+	#lw $t6, 12($gp)
+	#lw $t7, 16($gp)
 
 	bne $t4, $t0, changeTrue	
 	bne $t5, $t1, changeTrue
-	bne $t6, $t2, changeTrue
-	bne $t7, $t3, changeTrue
+	#bne $t6, $t2, changeTrue
+	#bne $t7, $t3, changeTrue
 	
 	li $v0, 0
 	
@@ -343,16 +373,555 @@ checkChange:
 	changeTrue:
 	li $v0, 1
 	
+	restoretvalues
+	
+	jr $ra
+
+checkFruitChange:
+
+	storetvalues
+	jumpStore
+	
+	li $v0, 0
+	
+	lw $t0, 32($gp)
+	bne $t0, 1, noPickupTypeChange
+	li $v0, 1
+	j endCheckFruitChange
+	noPickupTypeChange:
+	
+	lw $t0, 16($gp)
+	lw $t1, 36($gp)
+	
+	beq $t0, $t1, endCheckFruitChange
+	li $v0, 1
+	endCheckFruitChange:
+	
+	jumpRestore
+	restoretvalues
+	
+	jr $ra
+
+fruitHandler:
+	storetvalues
+	storesvalues
+	jumpStore
+	
+	lw $t0, 16($gp)
+	
+	beq $t0, 0, postFruitDraw					#Check player vs fruit positions only if fruit is available
+	fruitsAvail:
+	
+	lw $t0, 88($gp)
+	bne $t0, 1, noFruitTypeChange					#If conditions for a fruit change are met, change all fruit types
+	jal pickFruitType
+	sw $v0, 12($gp)
+	jal pickFruitType
+	sw $v0, 68($gp)
+	jal pickFruitType
+	sw $v0, 72($gp)
+	jal pickFruitType
+	sw $v0, 76($gp)
+	li $t0, 0
+	sw $t0, 88($gp)							#Indicate no need for new random fruit
+	
+	li $v0, 30	
+	syscall
+	sw $a1, 80($gp)
+	sw $a0, 84($gp)							#Set time of last fruit switch
 	
 	
+	
+	noFruitTypeChange:
+	
+	lw $a0, 4($gp)
+	lw $a1, 8($gp)
+	
+	jal checkFruitCollide						#Check if the player is currently touching the fruit positions
+	bne $v0, 1, notTouchingFruit
+	lw $t0, 44($gp)							#Increment the number of fruits picked up
+	addi $t0, $t0, 1
+	sw $t0, 44($gp)
+	lw $t0, 16($gp)							#If the player is on the fruit positions, update fruit availability.
+	sw $t0, 36($gp)
+	li $t0, 0
+	sw $t0, 16($gp)
+	jal eraseFruit
+	j postFruitDraw
+	notTouchingFruit:
+		
+	jal drawAllFruit
+	
+	postFruitDraw:
+	
+	jal newFruitCheck
+	
+	jumpRestore
+	restoretvalues
+	restoresvalues
+	
+	jr $ra
+
+newFruitCheck:
+	storetvalues
+	storesvalues
+	jumpStore
+	
+	lw $t0, 84($gp)
+	lw $t1, 80($gp)
+	#li $v0, 34
+	#move $a0, $t0
+	#syscall
+	#move $t0, $a0
+	#move $a0, $t1
+	#syscall
+	#move $t1, $a0
+	
+	li $v0, 30
+	syscall
+	#li $v0, 34
+	#syscall
+	#move $t0, $a0
+	#move $a0, $a1
+	#syscall
+	#move $a1, $a0
+	#move $a0, $t0
+	
+	sub $t2, $a0, $t0
+	
+	#addu $t0, $t0, $a0
+	#sltu $
+	
+	#subu $t2, $a0, $t0						#Subtract the lower bits
+	
+	#sltu $t3, $a0, $t0						#check for a borrow (if a0 < t0
+	
+	#subu $t2, $a1, $t1						#Subtract the higher bits
+	#sub $t2, $t2, $t3						#Adjust by the borrow amount
+	
+	#li $v0, 1
+	#move $a0, $t2
+	#syscall
+	
+	blt $t2, 5000, noNewFruit
+	lw $t0, 16($gp)
+	sw $t0, 36($gp)
+	li $t0, 1
+	sw $t0, 88($gp)
+	sw $t0, 16($gp)
+	
+	noNewFruit:
+	
+	
+	
+	jumpRestore
+	restoretvalues
+	restoresvalues
+	
+	jr $ra
+
+checkFruitCollide:
+	storetvalues
+	storesvalues
+	jumpStore
+	
+	jal checkFruit1Collide
+	beq $v0, 1, touchingFruit
+	jal checkFruit2Collide
+	beq $v0, 1, touchingFruit
+	jal checkFruit3Collide
+	beq $v0, 1, touchingFruit
+	jal checkFruit4Collide
+	beq $v0, 1, touchingFruit
+	touchingFruit:
+	
+	
+	jumpRestore
+	restoresvalues
+	restoretvalues
+	
+	jr $ra
+
+checkFruit1Collide:
+	storetvalues
+	storesvalues
+	jumpStore
+	
+	addi $t4, $a0, 0
+	
+	li $v0, 0
+	
+	bne $a0, 4, notFruit1
+	bne $a1, 4, notFruit1
+	lw $a0,  12($gp)				#Grab the fruit type
+	jal fruitTypePickup
+	li $v0, 1
+	notFruit1:
+	
+	addi $a0, $t4, 0
+	
+	jumpRestore
+	restoresvalues
 	restoretvalues
 	
 	jr $ra
 	
+checkFruit2Collide:
+	storetvalues
+	storesvalues
+	jumpStore
+	
+	li $v0, 0
+	
+	bne $a0, 14, notFruit2
+	bne $a1, 3, notFruit2
+	lw $a0,  68($gp)				#Grab the fruit type
+	jal fruitTypePickup
+	li $v0, 1
+	notFruit2:
+	
+	jumpRestore
+	restoresvalues
+	restoretvalues
+	
+	jr $ra
+	
+checkFruit3Collide:
+	storetvalues
+	storesvalues
+	jumpStore
+	
+	li $v0, 0
+	
+	bne $a0, 3, notFruit3
+	bne $a1, 16, notFruit3
+	lw $a0,  72($gp)				#Grab the fruit type
+	jal fruitTypePickup
+	li $v0, 1
+	notFruit3:
+	
+	jumpRestore
+	restoresvalues
+	restoretvalues
+	
+	jr $ra
+	
+checkFruit4Collide:
+	storetvalues
+	storesvalues
+	jumpStore
+	
+	li $v0, 0
+	
+	bne $a0, 16, notFruit4
+	bne $a1, 14, notFruit4
+	lw $a0,  76($gp)				#Grab the fruit type
+	jal fruitTypePickup
+	li $v0, 1
+	notFruit4:
+	
+	jumpRestore
+	restoresvalues
+	restoretvalues
+	
+	jr $ra
+
+fruitTypePickup:
+	storetvalues
+	jumpStore
+	
+	
+	bne $a0, 1, noNewBlueberry				#Check if the picked up fruit was a blueberry and respond accordingly
+	newLine
+	lw $t0, 48($gp)
+	addi $t0, $t0, 1
+	sw $t0, 48($gp)
+	la $a0, blueberries
+	syscall
+	li $v0, 1
+	lw $a0, 48($gp)
+	syscall
+	newLine
+	j fruitPickupDone
+	noNewBlueberry:
+	bne $a0, 2, noNewApple				#Check if the picked up fruit was an apple and respond accordingly
+	newLine
+	lw $t0, 52($gp)
+	addi $t0, $t0, 1
+	sw $t0, 52($gp)
+	la $a0, apples
+	syscall
+	li $v0, 1
+	lw $a0, 52($gp)
+	syscall
+	newLine
+	j fruitPickupDone
+	noNewApple:
+	bne $a0, 3, noNewOrange				#Check if the picked up fruit was an orange and respond accordingly
+	newLine
+	lw $t0, 56($gp)
+	addi $t0, $t0, 1
+	sw $t0, 56($gp)
+	la $a0, oranges
+	syscall
+	li $v0, 1
+	lw $a0, 56($gp)
+	syscall
+	newLine
+	j fruitPickupDone
+	noNewOrange:
+	bne $a0, 4, noNewBanana 			#Check if the picked up fruit was a banana and respond accordingly
+	newLine
+	lw $t0, 60($gp)
+	addi $t0, $t0, 1
+	sw $t0, 60($gp)
+	la $a0, bananas
+	syscall
+	li $v0, 1
+	lw $a0, 60($gp)
+	syscall
+	newLine
+	j fruitPickupDone
+	noNewBanana:
+	bne $a0, 5, noNewDragonfruit 			#Check if the picked up fruit was a dragonfruit and respond accordingly
+	newLine
+	lw $t0, 64($gp)
+	addi $t0, $t0, 1
+	sw $t0, 64($gp)
+	la $a0, dragonfruits
+	syscall
+	li $v0, 1
+	lw $a0, 64($gp)
+	syscall
+	newLine
+	noNewDragonfruit:
+	fruitPickupDone:
+	
+	
+	jumpRestore
+	restoretvalues
+	
+	jr $ra
+
+drawAllFruit:
+	storetvalues
+	storesvalues
+	jumpStore
+	
+	li $a0, 4						#Draw fruit 1
+	li $a1, 4
+	lw $a3, 12($gp)
+	jal drawFruitType
+	li $a0, 14						#Draw fruit 2
+	li $a1, 3
+	lw $a3, 68($gp)
+	jal drawFruitType
+	li $a0, 3						#Draw fruit 3
+	li $a1, 16
+	lw $a3, 72($gp)
+	jal drawFruitType
+	li $a0, 16						#Draw fruit 4
+	li $a1, 14
+	lw $a3, 76($gp)
+	jal drawFruitType
+	
+	jumpRestore
+	restoresvalues
+	restoretvalues
+	
+	jr $ra
+
+drawFruitType:
+	storetvalues
+	storesvalues
+	jumpStore
+	
+							#This method by default should have a0 and a1 set before it calls setpixel
+							#It uses the passed in a3 to determine the fruit type and set the color
+	
+	bne $a3, 1, notBlueberry
+	li $a2, 0x5e96c3
+	j drawFruitGo
+	notBlueberry:
+	bne $a3, 2, notApple
+	li $a2, 0x8b0202
+	j drawFruitGo
+	notApple:
+	bne $a3, 3, notOrange
+	li $a2, 0xFFA500
+	j drawFruitGo
+	notOrange:
+	bne $a3, 4, notBanana
+	li $a2, 0xffe135
+	j drawFruitGo
+	notBanana:
+	li $a2, 0xcf0061
+	drawFruitGo:
+	
+	jal setpixel
+	
+	jumpRestore
+	restoresvalues
+	restoretvalues
+	
+	jr $ra
+
+
+eraseFruit:
+	storetvalues
+	storesvalues
+	jumpStore
+	
+	li $a2, 0x000000
+	
+	li $a0, 4
+	li $a1, 4
+	jal setpixel
+	
+	li $a0, 14
+	li $a1, 3
+	jal setpixel
+	
+	li $a0, 3
+	li $a1, 16
+	jal setpixel
+	
+	li $a0, 16
+	li $a1, 14
+	jal setpixel
+	
+	
+	jumpRestore
+	restoresvalues
+	restoretvalues
+	
+	jr $ra
+
+
+lfsrSetUp:
+	storetvalues
+	storesvalues
+	jumpStore
+	
+	li $v0, 30
+	syscall
+	move $t0, $a0
+	sw $t0, n
+	sw $t0, lfsr
+	
+	jumpRestore
+	restoresvalues
+	restoretvalues
+	
+	jr $ra
+
+rNG:
+	storetvalues
+	storesvalues
+	jumpStore
+	
+	
+	#bne $a0, 0, noSysTime		#Don't use the system time if a0 isn't 0
+	#li $v0, 30			
+	#syscall
+	#li $v0, 34
+	#syscall
+	#move $t0, $a0			#Make a call to get the low system time and store it in t0 for close to random numbers
+	#sw $t0, n
+	#noSysTime:
+
+	#li $t0, 27
+	#addi $t1, $t0, 0
+	
+	#sw $t0, lfsr
+	
+	lw $t0, lfsr
+	
+	srl $t3, $t0, 0
+	srl $t2, $t0, 10		# lfsr >> 10
+	xor $t3, $t3, $t2		# (lfsr >> 0) ^ (lfsr >> 10)
+	srl $t2, $t0, 30		# lfsr >> 30
+	xor $t3, $t3, $t2		# (lfsr >> 0) ^ (lfsr >> 10) ^ (lfsr >> 30)
+	srl $t2, $t0, 31		# lfsr >> 31
+	xor $t3, $t3, $t2		# (lfsr >> 0) ^ (lfsr >> 10) ^ (lfsr >> 30) ^ (lfsr >> 31)
+	li $t2, 1
+	and $t3, $t3, $t2		# ((lfsr >> 0) ^ (lfsr >> 10) ^ (lfsr >> 30) ^ (lfsr >> 31)) & 1
+	
+	sw $t3, bit			# store new bit to be inputed at address allocated by label "bit"
+
+	srl $t2, $t0, 1			# lfsr >> 1	 shift right 1 to make space for new bit
+	sll $t3, $t3, 31		# bit << 31	 shift left 31 to get LSB to MSB position
+	or $t3, $t2, $t3		# (lfsr >> 1) | (bit << 31)
+	sw $t3, lfsr			# store generated random number at lfsr
+	
+	lw $a0, lfsr			#load lfsr
+	
+	li $t4, 0x000000ff
+	
+	and $a0, $a0, $t4		#AND a0 (LFSR result) with t4 to get a value between 0 and 255
+	#li $v0, 34
+	#syscall
+	
+	#newLine
+	
+	#li $v0, 34			# syscall to print integer
+	#lw $a0, lfsr			# load lfsr to be printed
+	#syscall
+	
+	#li $a0, 1
+	#li $a1, 100
+	#li $v0, 42
+	#syscall
+	
+	#move $a0, $v0
+	
+	
+	jumpRestore
+	restoresvalues
+	restoretvalues
+	
+	jr $ra
+
+pickFruitType:
+	storetvalues
+	storesvalues
+	jumpStore
+	
+	
+	jal rNG			#Call random
+	
+	move $t0, $a0
+	bgt $t0, 64, noBlueberry
+	li $v0, 1
+	j endPickFruit
+	noBlueberry:
+	bgt $t0, 128, noApple
+	li $v0, 2
+	j endPickFruit
+	noApple:
+	bgt $t0, 192, noOrange
+	li $v0, 3
+	j endPickFruit
+	noOrange:
+	bgt $t0, 240, noBanana
+	li $v0, 4
+	j endPickFruit
+	noBanana:
+	li $v0, 5
+	endPickFruit:
+	
+	
+	jumpRestore
+	restoresvalues
+	restoretvalues
+	
+	jr $ra
+
 	
 inputHandler:
 	storetvalues
 	storesvalues
+	jumpStore
 	
 	lw $t1, 4($gp)			#Store x and y coordinates for current access
 	lw $t2, 8($gp)
@@ -378,6 +947,13 @@ inputHandler:
 	bne $t0, 0x64, noRight
 	addi $t1, $t1, 1
 	noRight:
+	bne $t0, 0x6d, noRegenerate		#This is a backup command to reload the fruits so I can test functionality
+	li $t3, 1
+	sw $t3, 88($gp)
+	sw $t3, 16($gp)
+	li $t3, 0
+	sw $t3, 36($gp)
+	noRegenerate:
 	
 	la $a0, map2            		# Load the address of the map into $a0
 	
@@ -418,6 +994,8 @@ inputHandler:
 	li $v0, 4           			# System call code for printing a string
         la $a0, bonk     			# Load the bonk string address
         syscall
+        jal BONK
+        
 	canMove:
 	
 	
@@ -450,10 +1028,29 @@ inputHandler:
 	#canMove:
 	
 	
-	
+	jumpRestore
 	restoresvalues
 	restoretvalues
 	
+	
+	jr $ra
+
+BONK:
+	storetvalues
+	storesvalues
+	#jumpStore
+	
+	li $a0, 20			#pitch
+	li $a1, 250			#duration (in ms)
+	li $a2, 96			#instrument
+	li $a3, 75			#volume
+	
+	li $v0, 31
+	syscall
+	
+	#jumpRestore
+	restoresvalues
+	restoretvalues
 	
 	jr $ra
 
